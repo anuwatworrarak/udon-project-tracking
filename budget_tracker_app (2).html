@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบริหารจัดการและติดตามงบประมาณรายจ่ายประจำปี (แบบ คง. 70)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Sarabun) -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; }
+        .bg-plan-yellow { background-color: #fef08a !important; color: #854d0e; }
+        .bg-project-blue { background-color: #e0f2fe !important; color: #075985; }
+        .bg-activity-white { background-color: #ffffff !important; color: #334155; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Header Navbar -->
+    <header class="bg-emerald-800 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-file-invoice-dollar text-2xl text-amber-300"></i>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight">ระบบบันทึกและติดตามผลการดำเนินงาน (แบบ คง. 70)</h1>
+                    <p class="text-xs text-emerald-200">สำนักงานเกษตรจังหวัดอุดรธานี (รอบที่ 1 ปีงบประมาณ พ.ศ. 2570)</p>
+                </div>
+            </div>
+            
+            <!-- System Roles & Navigation Controls -->
+            <div class="flex items-center space-x-3 text-xs sm:text-sm">
+                <!-- Sync Status Indicator -->
+                <div id="syncStatus" class="flex items-center space-x-1.5 text-xs text-emerald-200 bg-emerald-900/40 px-2.5 py-1 rounded-full border border-emerald-700">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="syncText">เชื่อมต่อระบบ Cloud</span>
+                </div>
+
+                <div class="bg-emerald-900/60 rounded-lg px-3 py-1.5 border border-emerald-700 flex items-center space-x-2">
+                    <span id="roleBadge" class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-amber-400 text-slate-900">ผู้บันทึกข้อมูล</span>
+                    <button id="toggleRoleBtn" onclick="toggleRole()" class="text-emerald-200 hover:text-white text-xs underline">
+                        สลับเป็น Admin
+                    </button>
+                </div>
+                <button onclick="exportToExcel()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-3 py-1.5 rounded-lg transition duration-200 flex items-center space-x-1 shadow">
+                    <i class="fa-solid fa-file-excel"></i>
+                    <span class="hidden sm:inline">Export คง. 70</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-white border-b border-slate-200 shadow-sm sticky top-16 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 sm:space-x-8 overflow-x-auto custom-scrollbar">
+            <button id="tabBtn1" onclick="switchTab('tab-dashboard')" class="tab-btn py-3 px-2 border-b-2 border-emerald-600 font-semibold text-emerald-700 flex items-center space-x-2 whitespace-nowrap">
+                <i class="fa-solid fa-chart-pie"></i><span>แดชบอร์ดภาพรวม</span>
+            </button>
+            <button id="tabBtn2" onclick="switchTab('tab-entry')" class="tab-btn py-3 px-2 border-b-2 border-transparent font-medium text-slate-600 hover:text-emerald-600 flex items-center space-x-2 whitespace-nowrap">
+                <i class="fa-solid fa-pen-to-square"></i><span>บันทึกแผน/ผล รายเดือน</span>
+            </button>
+            <button id="tabBtn3" onclick="switchTab('tab-district')" class="tab-btn py-3 px-2 border-b-2 border-transparent font-medium text-slate-600 hover:text-emerald-600 flex items-center space-x-2 whitespace-nowrap">
+                <i class="fa-solid fa-map-location-dot"></i><span>จัดสรรงบรายอำเภอ (20 อ.)</span>
+            </button>
+            <button id="tabBtn4" onclick="switchTab('tab-report')" class="tab-btn py-3 px-2 border-b-2 border-transparent font-medium text-slate-600 hover:text-emerald-600 flex items-center space-x-2 whitespace-nowrap">
+                <i class="fa-solid fa-table-list"></i><span>รายงานสรุป คง. 70</span>
+            </button>
+            <button id="tabBtnAdmin" onclick="switchTab('tab-admin')" class="tab-btn py-3 px-2 border-b-2 border-transparent font-medium text-amber-600 hover:text-amber-700 flex items-center space-x-2 whitespace-nowrap hidden">
+                <i class="fa-solid fa-gear"></i><span>จัดการโครงสร้าง (Admin)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Workspace Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+        <!-- TAB 1: DASHBOARD OVERVIEW -->
+        <section id="tab-dashboard" class="tab-content block space-y-6">
+            <!-- Key Metric Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-semibold text-slate-500 uppercase">งบประมาณรวมทั้งสิ้น (คง. 70)</p>
+                    <p id="dashTotalBudget" class="text-2xl font-bold text-slate-800 mt-1">0 บาท</p>
+                    <div class="mt-2 text-xs text-slate-500" id="dashStructureInfo">กำลังโหลด...</div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-semibold text-slate-500 uppercase">แผนงบประมาณสะสม</p>
+                    <p id="dashPlannedBudget" class="text-2xl font-bold text-emerald-600 mt-1">0 บาท</p>
+                    <div class="mt-2 text-xs text-emerald-600 font-medium" id="dashPlannedPct">0% ของเป้าหมาย</div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-semibold text-slate-500 uppercase">ผลเบิกจ่ายจริงสะสม</p>
+                    <p id="dashActualBudget" class="text-2xl font-bold text-blue-600 mt-1">0 บาท</p>
+                    <div class="mt-2 text-xs text-blue-600 font-medium" id="dashActualPct">0% ของแผน</div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-xs font-semibold text-slate-500 uppercase">จัดสรรลงอำเภอแล้ว</p>
+                    <p id="dashDistrictBudget" class="text-2xl font-bold text-purple-600 mt-1">0 บาท</p>
+                    <div class="mt-2 text-xs text-purple-600 font-medium">ครอบคลุม 20 อำเภอ</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center space-x-2">
+                        <i class="fa-solid fa-chart-line text-emerald-600"></i>
+                        <span>แผน vs ผล เบิกจ่ายรายเดือน (ปีงบ 2570)</span>
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center space-x-2">
+                        <i class="fa-solid fa-chart-bar text-amber-500"></i>
+                        <span>การจัดสรรงบประมาณสูงสุด 5 อันดับอำเภอ</span>
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="districtChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: MONTHLY PLAN/RESULT ENTRY -->
+        <section id="tab-entry" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 class="text-lg font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center space-x-2">
+                    <i class="fa-solid fa-calendar-check text-emerald-600"></i>
+                    <span>บันทึกแผนและผลการดำเนินงานรายเดือน</span>
+                </h3>
+
+                <form id="entryForm" onsubmit="handleSaveEntry(event)" class="space-y-4">
+                    <!-- Cascading Dropdowns -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">1. แผนงาน <span class="text-red-500">*</span></label>
+                            <select id="selPlan" onchange="onPlanChange()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500">
+                                <option value="">-- เลือกแผนงาน --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">2. โครงการ <span class="text-red-500">*</span></label>
+                            <select id="selProject" onchange="onProjectChange()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500">
+                                <option value="">-- เลือกโครงการ --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">3. กิจกรรม/ขั้นตอน <span class="text-red-500">*</span></label>
+                            <select id="selActivity" onchange="onActivityChange()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500">
+                                <option value="">-- เลือกกิจกรรม --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Target & Location Metadata Inputs -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">หน่วยนับตัวชี้วัด</label>
+                            <input type="text" id="entryUnit" readonly class="w-full bg-slate-200 border border-slate-300 rounded-lg p-2 text-sm text-slate-600 font-medium" placeholder="เช่น ราย, ครั้ง, แปลง">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">ชื่อผู้รับผิดชอบกิจกรรม <span class="text-red-500">*</span></label>
+                            <input type="text" id="entryOwner" required class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500" placeholder="ระบุชื่อ-นามสกุล ผู้รับผิดชอบ">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">สถานที่ดำเนินการ <span class="text-red-500">*</span></label>
+                            <input type="text" id="entryLocation" required class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500" placeholder="ระบุอำเภอ/สถานที่ เช่น 20 อำเภอ">
+                        </div>
+                    </div>
+
+                    <!-- Month Selection & Quantity/Budget Inputs -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">เดือนที่ดำเนินการ (ปีงบ 2570) <span class="text-red-500">*</span></label>
+                            <select id="entryMonth" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500">
+                                <option value="Oct">ต.ค. 2569 (ไตรมาส 1)</option>
+                                <option value="Nov">พ.ย. 2569 (ไตรมาส 1)</option>
+                                <option value="Dec">ธ.ค. 2569 (ไตรมาส 1)</option>
+                                <option value="Jan">ม.ค. 2570 (ไตรมาส 2)</option>
+                                <option value="Feb">ก.พ. 2570 (ไตรมาส 2)</option>
+                                <option value="Mar">มี.ค. 2570 (ไตรมาส 2)</option>
+                                <option value="Apr">เม.ย. 2570 (ไตรมาส 3)</option>
+                                <option value="May">พ.ค. 2570 (ไตรมาส 3)</option>
+                                <option value="Jun">มิ.ย. 2570 (ไตรมาส 3)</option>
+                                <option value="Jul">ก.ค. 2570 (ไตรมาส 4)</option>
+                                <option value="Aug">ส.ค. 2570 (ไตรมาส 4)</option>
+                                <option value="Sep">ก.ย. 2570 (ไตรมาส 4)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">ประเภทการบันทึก <span class="text-red-500">*</span></label>
+                            <select id="entryType" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500">
+                                <option value="plan">แผนการดำเนินงาน (Plan)</option>
+                                <option value="actual">ผลการดำเนินงานจริง (Actual)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">ปริมาณงาน (ตามหน่วยนับ)</label>
+                            <input type="number" step="any" min="0" id="entryAmount" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" placeholder="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">งบประมาณ (บาท)</label>
+                            <input type="number" step="any" min="0" id="entryBudget" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-3">
+                        <button type="reset" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">ล้างข้อมูล</button>
+                        <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg text-sm shadow flex items-center space-x-1">
+                            <i class="fa-solid fa-cloud-arrow-up"></i><span>บันทึกข้อมูลออนไลน์</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- TAB 3: DISTRICT ALLOCATION -->
+        <section id="tab-district" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center space-x-2">
+                    <i class="fa-solid fa-map-location-dot text-emerald-600"></i>
+                    <span>จัดสรรงบประมาณและตัวชี้วัดลงระดับอำเภอ (20 อำเภอ จังหวัดอุดรธานี)</span>
+                </h3>
+                <p class="text-xs text-slate-500 mb-4">ระบุจำนวนหน่วยนับและงบประมาณที่จัดสรรให้แก่อำเภอต่างๆ โดยระบบจะสรุปยอดรวมให้อัตโนมัติ</p>
+
+                <!-- Activity Selector for Allocation -->
+                <div class="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6">
+                    <label class="block text-sm font-bold text-purple-900 mb-1">เลือกกิจกรรมที่ต้องการจัดสรรงบลงอำเภอ:</label>
+                    <select id="distActivitySel" onchange="loadDistrictAllocation()" class="w-full bg-white border border-purple-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-purple-500">
+                    </select>
+                    
+                    <div id="allocationSummary" class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold pt-2 border-t border-purple-200">
+                        <div class="text-slate-700">เป้าหมายกิจกรรม: <span id="distTargetTotal" class="text-emerald-700">0</span></div>
+                        <div class="text-slate-700">งบประมาณรวมกิจกรรม: <span id="distBudgetTotal" class="text-emerald-700">0 บาท</span></div>
+                        <div class="text-slate-700">จัดสรรลง 20 อำเภอแล้ว: <span id="distAllocatedTotal" class="text-purple-700">0 บาท</span></div>
+                    </div>
+                </div>
+
+                <!-- Table for 20 Districts -->
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-sm text-left text-slate-600">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b">
+                            <tr>
+                                <th class="px-4 py-3 text-center w-16">ลำดับ</th>
+                                <th class="px-4 py-3">อำเภอ</th>
+                                <th class="px-4 py-3 text-center">1. จำนวนหน่วยนับ</th>
+                                <th class="px-4 py-3 text-center">2. จำนวนเงินงบประมาณ (บาท)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="districtTableBody">
+                        </tbody>
+                        <tfoot class="bg-slate-50 font-bold text-slate-800 border-t">
+                            <tr>
+                                <td colspan="2" class="px-4 py-3 text-right">รวมจัดสรรทั้งหมด 20 อำเภอ:</td>
+                                <td id="sumDistQty" class="px-4 py-3 text-center text-emerald-700">0</td>
+                                <td id="sumDistAmt" class="px-4 py-3 text-center text-purple-700">0.00 บาท</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                    <button onclick="saveDistrictAllocation()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-sm shadow flex items-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk"></i><span>บันทึกการจัดสรรลงอำเภอ</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: COMPREHENSIVE REPORT TABLE (Strictly formatted to คง. 70) -->
+        <section id="tab-report" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">รายงานแผนปฏิบัติงานและแผนการใช้จ่ายงบประมาณ (แบบ คง. 70)</h3>
+                        <p class="text-xs text-slate-500">สำนักงานเกษตรจังหวัดอุดรธานี | รอบที่ 1 ประจำปีงบประมาณ พ.ศ. 2570</p>
+                    </div>
+                    <button onclick="exportToExcel()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-2 rounded-lg text-sm flex items-center space-x-1 shadow">
+                        <i class="fa-solid fa-file-excel"></i><span>Export ไฟล์ Excel / Google Sheets</span>
+                    </button>
+                </div>
+
+                <!-- Colored Legend -->
+                <div class="flex flex-wrap items-center gap-4 mb-3 text-xs">
+                    <span class="flex items-center"><span class="w-3 h-3 bg-yellow-200 border border-yellow-400 inline-block mr-1"></span> แถบสีเหลือง = แผนงาน</span>
+                    <span class="flex items-center"><span class="w-3 h-3 bg-sky-200 border border-sky-400 inline-block mr-1"></span> แถบสีฟ้า = โครงการ</span>
+                    <span class="flex items-center"><span class="w-3 h-3 bg-white border border-slate-300 inline-block mr-1"></span> สีขาว = กิจกรรม / ขั้นตอน</span>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-lg">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-200 text-slate-800 font-bold border-b">
+                                <th class="p-2.5 border text-center min-w-[280px]">โครงการ / กิจกรรม / ขั้นตอน</th>
+                                <th class="p-2.5 border text-center min-w-[80px]">หน่วยนับ</th>
+                                <th class="p-2.5 border text-center min-w-[90px]">ปริมาณงาน</th>
+                                <th class="p-2.5 border text-center min-w-[120px]">งบประมาณ (บาท)</th>
+                                <th class="p-2.5 border text-center min-w-[140px]">สถานที่ดำเนินการ</th>
+                                <th class="p-2.5 border text-center min-w-[140px]">ผู้รับผิดชอบ</th>
+                                <th class="p-2.5 border text-center min-w-[100px]">ความก้าวหน้า</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB ADMIN: MANAGING BUDGET STRUCTURE -->
+        <section id="tab-admin" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 class="text-lg font-bold text-amber-800 mb-2 flex items-center space-x-2">
+                    <i class="fa-solid fa-sliders text-amber-600"></i>
+                    <span>จัดการโครงสร้างแบบ คง. 70 (เฉพาะผู้ดูแลระบบ Admin)</span>
+                </h3>
+                <p class="text-xs text-slate-500 mb-4">คุณสามารถเพิ่ม แผนงาน โครงการ หรือกิจกรรมใหม่เข้าไปในแบบฟอร์มได้ โดยไม่ทำให้สูตรคำนวณเดิมเสียหาย</p>
+
+                <form onsubmit="handleAddNode(event)" class="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">ระดับรายการที่จะเพิ่ม</label>
+                            <select id="adminNodeType" onchange="onAdminNodeTypeChange()" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm">
+                                <option value="plan">1. แผนงาน (แถบสีเหลือง)</option>
+                                <option value="project">2. โครงการ (แถบสีฟ้า)</option>
+                                <option value="activity">3. กิจกรรม/ขั้นตอน (สีขาว)</option>
+                            </select>
+                        </div>
+                        <div id="adminParentPlanBox" class="hidden">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">สังกัดแผนงาน</label>
+                            <select id="adminParentPlan" onchange="onAdminParentPlanChange()" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm"></select>
+                        </div>
+                        <div id="adminParentProjBox" class="hidden">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">สังกัดโครงการ</label>
+                            <select id="adminParentProj" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm"></select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อรายการ (ตามแบบ คง. 70)</label>
+                            <input type="text" id="adminNodeName" required class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm" placeholder="กรอกชื่อแผนงาน / โครงการ / กิจกรรม">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">หน่วยนับ (เฉพาะกิจกรรม)</label>
+                            <input type="text" id="adminNodeUnit" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm" placeholder="เช่น ราย, คน, แปลง">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-sm shadow flex items-center space-x-1">
+                            <i class="fa-solid fa-plus"></i><span>เพิ่มเข้าโครงสร้าง คง. 70</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const UDON_DISTRICTS = [
+            "อำเภอเมืองอุดรธานี", "อำเภอกุดจับ", "อำเภอหนองวัวซอ", "อำเภอกุมภวาปี", "อำเภอโนนสะอาด",
+            "อำเภอหนองหาน", "อำเภอทุ่งฝน", "อำเภอไชยวาน", "อำเภอศรีธาตุ", "อำเภอวังสัมหมอ",
+            "อำเภอบ้านดุง", "อำเภอบ้านผือ", "อำเภอน้ำโสม", "อำเภอเพ็ญ", "อำเภอสร้างคอม",
+            "อำเภอหนองแสง", "อำเภอนายูง", "อำเภอพิบูลย์รักษ์", "อำเภอกู่แก้ว", "อำเภอประจักษ์ศิลปาคม"
+        ];
+
+        let budgetTree = [
+            {
+                id: "plan-1",
+                name: "1. แผนงานพื้นฐานด้านการสร้างความสามารถในการแข่งขัน",
+                type: "plan",
+                projects: [
+                    {
+                        id: "proj-1-1",
+                        name: "ผลผลิตเกษตรกรได้รับการส่งเสริมและพัฒนาศักยภาพ",
+                        type: "project",
+                        activities: [
+                            {
+                                id: "act-1-1-1",
+                                name: "1.1 พัฒนาอาสาสมัครเกษตรหมู่บ้าน (1.1.1 ประชุมคณะกรรมการ อมก. จังหวัด)",
+                                unit: "คน",
+                                targetQty: 16,
+                                targetBudget: 73145,
+                                owner: "-",
+                                location: "จังหวัดอุดรธานี",
+                                monthlyData: {
+                                    plan: { Oct: { qty: 16, budget: 73145 } },
+                                    actual: { Oct: { qty: 16, budget: 73145 } }
+                                },
+                                districtAllocation: {}
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: "plan-2",
+                name: "2. แผนงานยุทธศาสตร์การเกษตรสร้างมูลค่า",
+                type: "plan",
+                projects: [
+                    {
+                        id: "proj-2-1",
+                        name: "1. โครงการส่งเสริมการจัดการสุขภาพพืชเพื่อเพิ่มประสิทธิภาพการผลิตสินค้าเกษตร",
+                        type: "project",
+                        activities: [
+                            {
+                                id: "act-2-1-1",
+                                name: "1.1.1 Support สำรวจติดตามสถานการณ์ศัตรูพืชในพื้นที่เสี่ยง",
+                                unit: "แปลง",
+                                targetQty: 69,
+                                targetBudget: 161530,
+                                owner: "-",
+                                location: "20 อำเภอ",
+                                monthlyData: {
+                                    plan: { Feb: { qty: 20, budget: 91930 }, Mar: { qty: 49, budget: 69600 } },
+                                    actual: { Feb: { qty: 20, budget: 91930 } }
+                                },
+                                districtAllocation: {}
+                            },
+                            {
+                                id: "act-2-1-2",
+                                name: "1.2.1 สุ่มสำรวจเพื่อประเมินความหนาแน่นศัตรูพืช (RRA)",
+                                unit: "อำเภอ",
+                                targetQty: 20,
+                                targetBudget: 24000,
+                                owner: "-",
+                                location: "20 อำเภอ",
+                                monthlyData: {
+                                    plan: { Jan: { qty: 7, budget: 12000 }, Feb: { qty: 13, budget: 12000 } },
+                                    actual: {}
+                                },
+                                districtAllocation: {}
+                            },
+                            {
+                                id: "act-2-1-3",
+                                name: "1.3 โครงการบริหารจัดการงบประมาณพัฒนาและส่งเสริมการเกษตรตามเป้าหมาย (คง. 70)",
+                                unit: "กิจกรรม",
+                                targetQty: 1,
+                                targetBudget: 3366875,
+                                owner: "-",
+                                location: "20 อำเภอ",
+                                monthlyData: { plan: {}, actual: {} },
+                                districtAllocation: {}
+                            }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        let isAdminRole = false;
+        let monthlyChartInstance = null;
+        let districtChartInstance = null;
+
+        window.onload = function() {
+            populatePlanDropdown();
+            populateDistrictTable();
+            populateDistActivityDropdown();
+            renderReportTable();
+            initCharts();
+            updateDashboardMetrics();
+        };
+
+        function toggleRole() {
+            isAdminRole = !isAdminRole;
+            const badge = document.getElementById('roleBadge');
+            const toggleBtn = document.getElementById('toggleRoleBtn');
+            const adminTab = document.getElementById('tabBtnAdmin');
+
+            if (isAdminRole) {
+                badge.innerText = "ผู้ดูแลระบบ (Admin)";
+                badge.className = "inline-block px-2 py-0.5 rounded text-xs font-semibold bg-red-500 text-white";
+                toggleBtn.innerText = "สลับเป็น ผู้บันทึก";
+                adminTab.classList.remove('hidden');
+            } else {
+                badge.innerText = "ผู้บันทึกข้อมูล";
+                badge.className = "inline-block px-2 py-0.5 rounded text-xs font-semibold bg-amber-400 text-slate-900";
+                toggleBtn.innerText = "สลับเป็น Admin";
+                adminTab.classList.add('hidden');
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-emerald-600', 'text-emerald-700', 'font-semibold');
+                btn.classList.add('border-transparent', 'text-slate-600');
+            });
+
+            const activeBtnMap = {
+                'tab-dashboard': 'tabBtn1',
+                'tab-entry': 'tabBtn2',
+                'tab-district': 'tabBtn3',
+                'tab-report': 'tabBtn4',
+                'tab-admin': 'tabBtnAdmin'
+            };
+            const btnId = activeBtnMap[tabId];
+            if (btnId) {
+                const btn = document.getElementById(btnId);
+                btn.classList.add('border-emerald-600', 'text-emerald-700', 'font-semibold');
+                btn.classList.remove('border-transparent', 'text-slate-600');
+            }
+
+            if (tabId === 'tab-dashboard') updateDashboardMetrics();
+            else if (tabId === 'tab-report') renderReportTable();
+        }
+
+        function populatePlanDropdown() {
+            const sel = document.getElementById('selPlan');
+            sel.innerHTML = '<option value="">-- เลือกแผนงาน --</option>';
+            budgetTree.forEach(p => { sel.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
+        }
+
+        function onPlanChange() {
+            const planId = document.getElementById('selPlan').value;
+            const selProj = document.getElementById('selProject');
+            const selAct = document.getElementById('selActivity');
+            selProj.innerHTML = '<option value="">-- เลือกโครงการ --</option>';
+            selAct.innerHTML = '<option value="">-- เลือกกิจกรรม --</option>';
+
+            if (!planId) return;
+            const plan = budgetTree.find(p => p.id === planId);
+            if (plan && plan.projects) {
+                plan.projects.forEach(pj => { selProj.innerHTML += `<option value="${pj.id}">${pj.name}</option>`; });
+            }
+        }
+
+        function onProjectChange() {
+            const planId = document.getElementById('selPlan').value;
+            const projId = document.getElementById('selProject').value;
+            const selAct = document.getElementById('selActivity');
+            selAct.innerHTML = '<option value="">-- เลือกกิจกรรม --</option>';
+
+            if (!projId) return;
+            const plan = budgetTree.find(p => p.id === planId);
+            const proj = plan?.projects.find(pj => pj.id === projId);
+            if (proj && proj.activities) {
+                proj.activities.forEach(act => { selAct.innerHTML += `<option value="${act.id}">${act.name}</option>`; });
+            }
+        }
+
+        function onActivityChange() {
+            const act = getSelectedActivity();
+            if (act) {
+                document.getElementById('entryUnit').value = act.unit || 'ราย';
+                document.getElementById('entryOwner').value = act.owner || '';
+                document.getElementById('entryLocation').value = act.location || '';
+            }
+        }
+
+        function getSelectedActivity() {
+            const planId = document.getElementById('selPlan').value;
+            const projId = document.getElementById('selProject').value;
+            const actId = document.getElementById('selActivity').value;
+            const plan = budgetTree.find(p => p.id === planId);
+            const proj = plan?.projects.find(pj => pj.id === projId);
+            return proj?.activities.find(a => a.id === actId);
+        }
+
+        function handleSaveEntry(e) {
+            e.preventDefault();
+            const act = getSelectedActivity();
+            if (!act) { alert('กรุณาเลือกกิจกรรมให้ครบถ้วน'); return; }
+
+            const month = document.getElementById('entryMonth').value;
+            const type = document.getElementById('entryType').value;
+            const qty = parseFloat(document.getElementById('entryAmount').value) || 0;
+            const budget = parseFloat(document.getElementById('entryBudget').value) || 0;
+
+            act.owner = document.getElementById('entryOwner').value;
+            act.location = document.getElementById('entryLocation').value;
+
+            if (!act.monthlyData) act.monthlyData = { plan: {}, actual: {} };
+            if (!act.monthlyData[type]) act.monthlyData[type] = {};
+
+            act.monthlyData[type][month] = { qty, budget };
+
+            const syncText = document.getElementById('syncText');
+            syncText.innerText = 'บันทึกข้อมูลเรียบร้อย';
+            setTimeout(() => { syncText.innerText = 'เชื่อมต่อระบบ Cloud'; }, 2000);
+
+            alert('บันทึกแผน/ผลการใช้จ่ายเรียบร้อยแล้ว');
+            updateDashboardMetrics();
+            renderReportTable();
+        }
+
+        function populateDistActivityDropdown() {
+            const sel = document.getElementById('distActivitySel');
+            sel.innerHTML = '';
+            budgetTree.forEach(plan => {
+                plan.projects.forEach(proj => {
+                    proj.activities.forEach(act => {
+                        sel.innerHTML += `<option value="${act.id}">${act.name} (งบกิจกรรม: ${act.targetBudget.toLocaleString()} บาท)</option>`;
+                    });
+                });
+            });
+            loadDistrictAllocation();
+        }
+
+        function populateDistrictTable() {
+            const tbody = document.getElementById('districtTableBody');
+            tbody.innerHTML = '';
+            UDON_DISTRICTS.forEach((distName, idx) => {
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-slate-50">
+                        <td class="px-4 py-2 text-center font-medium text-slate-500">${idx + 1}</td>
+                        <td class="px-4 py-2 font-semibold text-slate-700">${distName}</td>
+                        <td class="px-4 py-2"><input type="number" id="distQty_${idx}" onchange="calcDistrictSum()" class="w-full text-center bg-slate-50 border border-slate-300 rounded p-1.5 text-sm focus:ring-2 focus:ring-purple-500" placeholder="0"></td>
+                        <td class="px-4 py-2"><input type="number" id="distAmt_${idx}" onchange="calcDistrictSum()" class="w-full text-center bg-slate-50 border border-slate-300 rounded p-1.5 text-sm focus:ring-2 focus:ring-purple-500" placeholder="0.00"></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function findActivityById(actId) {
+            for (let p of budgetTree) {
+                for (let pj of p.projects) {
+                    for (let a of pj.activities) {
+                        if (a.id === actId) return a;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function loadDistrictAllocation() {
+            const actId = document.getElementById('distActivitySel').value;
+            const act = findActivityById(actId);
+            if (!act) return;
+
+            document.getElementById('distTargetTotal').innerText = `${act.targetQty} ${act.unit || ''}`;
+            document.getElementById('distBudgetTotal').innerText = `${act.targetBudget.toLocaleString()} บาท`;
+
+            let sumAlloc = 0;
+            UDON_DISTRICTS.forEach((_, idx) => {
+                const data = act.districtAllocation?.[idx] || { qty: 0, amt: 0 };
+                document.getElementById(`distQty_${idx}`).value = data.qty || '';
+                document.getElementById(`distAmt_${idx}`).value = data.amt || '';
+                sumAlloc += parseFloat(data.amt) || 0;
+            });
+
+            document.getElementById('distAllocatedTotal').innerText = `${sumAlloc.toLocaleString()} บาท`;
+            calcDistrictSum();
+        }
+
+        function calcDistrictSum() {
+            let totalQty = 0;
+            let totalAmt = 0;
+            UDON_DISTRICTS.forEach((_, idx) => {
+                totalQty += parseFloat(document.getElementById(`distQty_${idx}`).value) || 0;
+                totalAmt += parseFloat(document.getElementById(`distAmt_${idx}`).value) || 0;
+            });
+            document.getElementById('sumDistQty').innerText = totalQty.toLocaleString();
+            document.getElementById('sumDistAmt').innerText = `${totalAmt.toLocaleString(undefined, {minimumFractionDigits: 2})} บาท`;
+        }
+
+        function saveDistrictAllocation() {
+            const actId = document.getElementById('distActivitySel').value;
+            const act = findActivityById(actId);
+            if (!act) return;
+
+            act.districtAllocation = {};
+            UDON_DISTRICTS.forEach((_, idx) => {
+                const qty = parseFloat(document.getElementById(`distQty_${idx}`).value) || 0;
+                const amt = parseFloat(document.getElementById(`distAmt_${idx}`).value) || 0;
+                act.districtAllocation[idx] = { qty, amt };
+            });
+
+            alert('บันทึกยอดการจัดสรรงบประมาณลง 20 อำเภอเรียบร้อยแล้ว');
+            updateDashboardMetrics();
+        }
+
+        function renderReportTable() {
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+
+            budgetTree.forEach(plan => {
+                let planTargetBudget = 0;
+                let planTargetQty = 0;
+
+                plan.projects.forEach(proj => {
+                    proj.activities.forEach(act => {
+                        planTargetBudget += act.targetBudget || 0;
+                        planTargetQty += act.targetQty || 0;
+                    });
+                });
+
+                tbody.innerHTML += `
+                    <tr class="bg-plan-yellow font-bold border-b border-yellow-300">
+                        <td class="p-2.5 font-bold">${plan.name}</td>
+                        <td class="p-2.5 text-center">รวมแผนงาน</td>
+                        <td class="p-2.5 text-center">${planTargetQty.toLocaleString()}</td>
+                        <td class="p-2.5 text-right">${planTargetBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="p-2.5 text-center">-</td>
+                        <td class="p-2.5 text-center">-</td>
+                        <td class="p-2.5 text-center">แผน/ผล</td>
+                    </tr>
+                `;
+
+                plan.projects.forEach(proj => {
+                    let projBudget = 0;
+                    let projQty = 0;
+                    proj.activities.forEach(act => {
+                        projBudget += act.targetBudget || 0;
+                        projQty += act.targetQty || 0;
+                    });
+
+                    tbody.innerHTML += `
+                        <tr class="bg-project-blue font-bold border-b border-sky-300">
+                            <td class="p-2.5 pl-6">${proj.name}</td>
+                            <td class="p-2.5 text-center">รวมโครงการ</td>
+                            <td class="p-2.5 text-center">${projQty.toLocaleString()}</td>
+                            <td class="p-2.5 text-right">${projBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                            <td class="p-2.5 text-center">-</td>
+                            <td class="p-2.5 text-center">-</td>
+                            <td class="p-2.5 text-center">-</td>
+                        </tr>
+                    `;
+
+                    proj.activities.forEach(act => {
+                        tbody.innerHTML += `
+                            <tr class="bg-white hover:bg-slate-50 border-b border-slate-200">
+                                <td class="p-2.5 pl-10 text-slate-700">${act.name}</td>
+                                <td class="p-2.5 text-center text-slate-600">${act.unit}</td>
+                                <td class="p-2.5 text-center font-medium">${act.targetQty.toLocaleString()}</td>
+                                <td class="p-2.5 text-right font-medium">${act.targetBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                <td class="p-2.5 text-center text-slate-600">${act.location}</td>
+                                <td class="p-2.5 text-center text-slate-600">${act.owner}</td>
+                                <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-semibold">บันทึกแล้ว</span></td>
+                            </tr>
+                        `;
+                    });
+                });
+            });
+        }
+
+        function exportToExcel() {
+            const dataForExcel = [
+                ["แบบรายงานแผนปฏิบัติงานและแผนการใช้จ่ายงบประมาณ (แบบ คง. 70)"],
+                ["สำนักงานเกษตรจังหวัดอุดรธานี ประจำปีงบประมาณ พ.ศ. 2570 รอบที่ 1"],
+                [],
+                ["โครงการ / กิจกรรม / ขั้นตอน", "หน่วยนับ", "ปริมาณงาน", "งบประมาณ (บาท)", "สถานที่ดำเนินการ", "ผู้รับผิดชอบ"]
+            ];
+
+            budgetTree.forEach(plan => {
+                let planBudget = 0;
+                let planQty = 0;
+                plan.projects.forEach(pj => pj.activities.forEach(a => { planBudget += a.targetBudget; planQty += a.targetQty; }));
+                dataForExcel.push([plan.name, "รวมแผนงาน", planQty, planBudget, "", ""]);
+
+                plan.projects.forEach(proj => {
+                    let projBudget = 0;
+                    let projQty = 0;
+                    proj.activities.forEach(a => { projBudget += a.targetBudget; projQty += a.targetQty; });
+                    dataForExcel.push(["  " + proj.name, "รวมโครงการ", projQty, projBudget, "", ""]);
+
+                    proj.activities.forEach(act => {
+                        dataForExcel.push(["    " + act.name, act.unit, act.targetQty, act.targetBudget, act.location, act.owner]);
+                    });
+                });
+            });
+
+            const worksheet = XLSX.utils.aoa_to_sheet(dataForExcel);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "แบบ_คง70_อุดรธานี");
+            XLSX.writeFile(workbook, "แบบ_คง70_รอบที่1_จังหวัดอุดรธานี_2570.xlsx");
+        }
+
+        function updateDashboardMetrics() {
+            let grandTotalBudget = 0;
+            let plannedBudgetSum = 0;
+            let actualBudgetSum = 0;
+            let districtAllocSum = 0;
+            let planCount = budgetTree.length;
+            let projCount = 0;
+
+            budgetTree.forEach(p => {
+                projCount += p.projects.length;
+                p.projects.forEach(pj => {
+                    pj.activities.forEach(act => {
+                        grandTotalBudget += act.targetBudget || 0;
+                        if (act.monthlyData?.plan) Object.values(act.monthlyData.plan).forEach(m => plannedBudgetSum += (m.budget || 0));
+                        if (act.monthlyData?.actual) Object.values(act.monthlyData.actual).forEach(m => actualBudgetSum += (m.budget || 0));
+                        if (act.districtAllocation) Object.values(act.districtAllocation).forEach(d => districtAllocSum += (d.amt || 0));
+                    });
+                });
+            });
+
+            document.getElementById('dashTotalBudget').innerText = `${grandTotalBudget.toLocaleString()} บาท`;
+            document.getElementById('dashPlannedBudget').innerText = `${plannedBudgetSum.toLocaleString()} บาท`;
+            document.getElementById('dashActualBudget').innerText = `${actualBudgetSum.toLocaleString()} บาท`;
+            document.getElementById('dashDistrictBudget').innerText = `${districtAllocSum.toLocaleString()} บาท`;
+            document.getElementById('dashStructureInfo').innerText = `รวม ${planCount} แผนงาน / ${projCount} โครงการ`;
+
+            const plannedPct = grandTotalBudget > 0 ? ((plannedBudgetSum / grandTotalBudget) * 100).toFixed(1) : 0;
+            const actualPct = plannedBudgetSum > 0 ? ((actualBudgetSum / plannedBudgetSum) * 100).toFixed(1) : 0;
+
+            document.getElementById('dashPlannedPct').innerText = `${plannedPct}% ของเป้าหมาย`;
+            document.getElementById('dashActualPct').innerText = `${actualPct}% ของแผน`;
+
+            updateCharts();
+        }
+
+        function initCharts() {
+            const ctx1 = document.getElementById('monthlyChart').getContext('2d');
+            monthlyChartInstance = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['ต.ค.', 'พ.ย.', 'ธ.ค.', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.'],
+                    datasets: [
+                        { label: 'แผนการใช้จ่าย', data: [73145, 0, 0, 12000, 103930, 69600, 0, 0, 0, 0, 0, 0], borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.1)', fill: true, tension: 0.3 },
+                        { label: 'ผลเบิกจ่ายจริง', data: [73145, 0, 0, 0, 91930, 0, 0, 0, 0, 0, 0, 0], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.3 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctx2 = document.getElementById('districtChart').getContext('2d');
+            districtChartInstance = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['อ.เมืองอุดรธานี', 'อ.กุมภวาปี', 'อ.บ้านผือ', 'อ.เพ็ญ', 'อ.หนองหาน'],
+                    datasets: [{
+                        label: 'งบประมาณจัดสรร (บาท)',
+                        data: [45000, 32000, 28000, 25000, 22000],
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function updateCharts() {
+            if (monthlyChartInstance) monthlyChartInstance.update();
+            if (districtChartInstance) districtChartInstance.update();
+        }
+
+        function onAdminNodeTypeChange() {
+            const type = document.getElementById('adminNodeType').value;
+            const planBox = document.getElementById('adminParentPlanBox');
+            const projBox = document.getElementById('adminParentProjBox');
+
+            if (type === 'plan') {
+                planBox.classList.add('hidden');
+                projBox.classList.add('hidden');
+            } else if (type === 'project') {
+                planBox.classList.remove('hidden');
+                projBox.classList.add('hidden');
+                populateAdminPlanDropdown();
+            } else if (type === 'activity') {
+                planBox.classList.remove('hidden');
+                projBox.classList.remove('hidden');
+                populateAdminPlanDropdown();
+            }
+        }
+
+        function populateAdminPlanDropdown() {
+            const sel = document.getElementById('adminParentPlan');
+            sel.innerHTML = '';
+            budgetTree.forEach(p => sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+            onAdminParentPlanChange();
+        }
+
+        function onAdminParentPlanChange() {
+            const planId = document.getElementById('adminParentPlan').value;
+            const selProj = document.getElementById('adminParentProj');
+            selProj.innerHTML = '';
+            const plan = budgetTree.find(p => p.id === planId);
+            if (plan && plan.projects) {
+                plan.projects.forEach(pj => selProj.innerHTML += `<option value="${pj.id}">${pj.name}</option>`);
+            }
+        }
+
+        function handleAddNode(e) {
+            e.preventDefault();
+            const type = document.getElementById('adminNodeType').value;
+            const name = document.getElementById('adminNodeName').value;
+            const unit = document.getElementById('adminNodeUnit').value || 'ราย';
+
+            if (type === 'plan') {
+                budgetTree.push({
+                    id: `plan-${Date.now()}`,
+                    name: `${budgetTree.length + 1}. ${name}`,
+                    type: "plan",
+                    projects: []
+                });
+            } else if (type === 'project') {
+                const planId = document.getElementById('adminParentPlan').value;
+                const plan = budgetTree.find(p => p.id === planId);
+                if (plan) {
+                    plan.projects.push({
+                        id: `proj-${Date.now()}`,
+                        name: name,
+                        type: "project",
+                        activities: []
+                    });
+                }
+            } else if (type === 'activity') {
+                const planId = document.getElementById('adminParentPlan').value;
+                const projId = document.getElementById('adminParentProj').value;
+                const plan = budgetTree.find(p => p.id === planId);
+                const proj = plan?.projects.find(pj => pj.id === projId);
+                if (proj) {
+                    proj.activities.push({
+                        id: `act-${Date.now()}`,
+                        name: name,
+                        unit: unit,
+                        targetQty: 0,
+                        targetBudget: 0,
+                        owner: "-",
+                        location: "20 อำเภอ",
+                        monthlyData: { plan: {}, actual: {} },
+                        districtAllocation: {}
+                    });
+                }
+            }
+
+            alert('เพิ่มรายการเข้าโครงสร้าง คง. 70 เรียบร้อยแล้ว');
+            populatePlanDropdown();
+            populateDistActivityDropdown();
+            renderReportTable();
+            updateDashboardMetrics();
+        }
+    </script>
+</body>
+</html>
